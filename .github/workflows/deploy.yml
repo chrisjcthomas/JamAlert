@@ -1,0 +1,433 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      skip_tests:
+        description: 'Skip tests during deployment'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './backend'
+  AZURE_WEBAPP_PACKAGE_PATH: '.'
+
+jobs:
+  # Determine deployment environment
+  setup:
+    name: Setup Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      resource_group: ${{ steps.env.outputs.resource_group }}
+      function_app_name: ${{ steps.env.outputs.function_app_name }}
+      web_app_name: ${{ steps.env.outputs.web_app_name }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENVIRONMENT="prod"
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            ENVIRONMENT="staging"
+          else
+            ENVIRONMENT="dev"
+          fi
+          
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "resource_group=jamalert-${ENVIRONMENT}-rg" >> $GITHUB_OUTPUT
+          echo "function_app_name=jamalert-${ENVIRONMENT}-func" >> $GITHUB_OUTPUT
+          echo "web_app_name=jamalert-${ENVIRONMENT}-web" >> $GITHUB_OUTPUT
+          
+          echo "Deploying to environment: ${ENVIRONMENT}"
+
+  # Run tests (unless skipped)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.skip_tests != 'true'
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: jamalert_test
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend && pnpm install --frozen-lockfile
+          
+      - name: Setup test database
+        working-directory: ./backend
+        env:
+          DATABASE_URL: mysql://test_user:test_password@localhost:3306/jamalert_test
+        run: |
+          npx prisma generate
+          npx prisma db push
+          
+      - name: Run frontend tests
+        run: pnpm test -- --coverage --watchAll=false
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: mysql://test_user:test_password@localhost:3306/jamalert_test
+          JWT_SECRET: test-jwt-secret-key-for-testing-only-32-chars
+        run: pnpm test -- --coverage --watchAll=false
+
+  # Deploy Infrastructure
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [setup, test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Deploy Azure Resources
+        uses: azure/arm-deploy@v1
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ needs.setup.outputs.resource_group }}
+          template: ./infrastructure/azure/main.bicep
+          parameters: |
+            environment=${{ needs.setup.outputs.environment }}
+            namePrefix=jamalert
+            mysqlAdminLogin=${{ secrets.MYSQL_ADMIN_LOGIN }}
+            mysqlAdminPassword=${{ secrets.MYSQL_ADMIN_PASSWORD }}
+            mysqlSkuName=${{ needs.setup.outputs.environment == 'prod' && 'Standard_D2ds_v4' || 'Standard_B1ms' }}
+            mysqlStorageSizeGB=${{ needs.setup.outputs.environment == 'prod' && '100' || '20' }}
+            mysqlBackupRetentionDays=${{ needs.setup.outputs.environment == 'prod' && '30' || '7' }}
+            mysqlGeoRedundantBackup=${{ needs.setup.outputs.environment == 'prod' && 'true' || 'false' }}
+          failOnStdErr: false
+
+  # Database Migration
+  database-migration:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-infrastructure]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: pnpm install --frozen-lockfile
+        
+      - name: Run database migrations
+        working-directory: ./backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          
+      - name: Seed database (dev/staging only)
+        if: needs.setup.outputs.environment != 'prod'
+        working-directory: ./backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma db seed
+
+  # Deploy Backend (Function App)
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [setup, database-migration]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install backend dependencies
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        run: pnpm install --frozen-lockfile --prod
+
+      - name: Build backend
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        run: pnpm run build
+        
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ needs.setup.outputs.function_app_name }}
+          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          
+      - name: Update Function App Settings
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ needs.setup.outputs.function_app_name }}
+          app-settings-json: |
+            [
+              {
+                "name": "DATABASE_URL",
+                "value": "${{ secrets.DATABASE_URL }}",
+                "slotSetting": false
+              },
+              {
+                "name": "JWT_SECRET",
+                "value": "${{ secrets.JWT_SECRET }}",
+                "slotSetting": false
+              },
+              {
+                "name": "SMTP_HOST",
+                "value": "${{ secrets.SMTP_HOST }}",
+                "slotSetting": false
+              },
+              {
+                "name": "SMTP_PORT",
+                "value": "${{ secrets.SMTP_PORT }}",
+                "slotSetting": false
+              },
+              {
+                "name": "SMTP_USER",
+                "value": "${{ secrets.SMTP_USER }}",
+                "slotSetting": false
+              },
+              {
+                "name": "SMTP_PASS",
+                "value": "${{ secrets.SMTP_PASS }}",
+                "slotSetting": false
+              },
+              {
+                "name": "WEATHER_API_KEY",
+                "value": "${{ secrets.WEATHER_API_KEY }}",
+                "slotSetting": false
+              },
+              {
+                "name": "ENVIRONMENT",
+                "value": "${{ needs.setup.outputs.environment }}",
+                "slotSetting": false
+              }
+            ]
+
+  # Deploy Frontend (Web App)
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-backend]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://${{ needs.setup.outputs.function_app_name }}.azurewebsites.net
+          NEXT_PUBLIC_ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+        run: pnpm run build
+        
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Deploy to staging slot (prod only)
+        if: needs.setup.outputs.environment == 'prod'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ needs.setup.outputs.web_app_name }}
+          slot-name: staging
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+          
+      - name: Deploy to production slot
+        if: needs.setup.outputs.environment != 'prod'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ needs.setup.outputs.web_app_name }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  # Health Check and Smoke Tests
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-frontend]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Wait for deployment to stabilize
+        run: sleep 60
+        
+      - name: Health check - Backend API
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://${{ needs.setup.outputs.function_app_name }}.azurewebsites.net/api/health)
+          if [ $response -eq 200 ]; then
+            echo "✅ Backend health check passed"
+          else
+            echo "❌ Backend health check failed with status $response"
+            exit 1
+          fi
+          
+      - name: Health check - Frontend
+        run: |
+          if [ "${{ needs.setup.outputs.environment }}" = "prod" ]; then
+            url="https://${{ needs.setup.outputs.web_app_name }}-staging.azurewebsites.net"
+          else
+            url="https://${{ needs.setup.outputs.web_app_name }}.azurewebsites.net"
+          fi
+          
+          response=$(curl -s -o /dev/null -w "%{http_code}" $url)
+          if [ $response -eq 200 ]; then
+            echo "✅ Frontend health check passed"
+          else
+            echo "❌ Frontend health check failed with status $response"
+            exit 1
+          fi
+
+  # Production Slot Swap (Production only)
+  production-swap:
+    name: Production Slot Swap
+    runs-on: ubuntu-latest
+    needs: [setup, health-check]
+    if: needs.setup.outputs.environment == 'prod'
+    environment: production-approval
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Swap staging to production
+        run: |
+          az webapp deployment slot swap \
+            --resource-group ${{ needs.setup.outputs.resource_group }} \
+            --name ${{ needs.setup.outputs.web_app_name }} \
+            --slot staging \
+            --target-slot production
+
+  # Post-deployment verification
+  post-deployment:
+    name: Post-deployment Verification
+    runs-on: ubuntu-latest
+    needs: [setup, health-check, production-swap]
+    if: always() && (needs.health-check.result == 'success')
+    
+    steps:
+      - name: Final health check
+        run: |
+          if [ "${{ needs.setup.outputs.environment }}" = "prod" ]; then
+            url="https://jamalert.jm"
+          else
+            url="https://${{ needs.setup.outputs.web_app_name }}.azurewebsites.net"
+          fi
+          
+          response=$(curl -s -o /dev/null -w "%{http_code}" $url)
+          if [ $response -eq 200 ]; then
+            echo "✅ Final deployment verification passed"
+          else
+            echo "❌ Final deployment verification failed with status $response"
+            exit 1
+          fi
+          
+      - name: Deployment summary
+        run: |
+          echo "🚀 Deployment completed successfully!"
+          echo "Environment: ${{ needs.setup.outputs.environment }}"
+          echo "Backend: https://${{ needs.setup.outputs.function_app_name }}.azurewebsites.net"
+          if [ "${{ needs.setup.outputs.environment }}" = "prod" ]; then
+            echo "Frontend: https://jamalert.jm"
+          else
+            echo "Frontend: https://${{ needs.setup.outputs.web_app_name }}.azurewebsites.net"
+          fi

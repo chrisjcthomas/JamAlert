@@ -10,10 +10,10 @@ echo "======================================="
 echo "Checking Vercel CLI installation..."
 if ! command -v vercel &> /dev/null; then
     echo "❌ Vercel CLI not found. Installing..."
-    npm install -g vercel
+    pnpm install -g vercel
     if [ $? -ne 0 ]; then
         echo "❌ Failed to install Vercel CLI. Please install manually:"
-        echo "   npm install -g vercel"
+        echo "   pnpm install -g vercel"
         exit 1
     fi
     echo "✅ Vercel CLI installed successfully!"
@@ -35,7 +35,7 @@ echo "✅ Vercel authentication verified!"
 
 # Run build to check for errors
 echo "Building project..."
-npm run build
+pnpm run build
 if [ $? -ne 0 ]; then
     echo "❌ Build failed. Please fix build errors and try again."
     exit 1

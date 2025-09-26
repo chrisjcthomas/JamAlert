@@ -67,17 +67,17 @@ Update `local.settings.json` with your configuration:
 
 Generate Prisma client:
 ```bash
-npm run db:generate
+pnpm run db:generate
 ```
 
 Push database schema (for development):
 ```bash
-npm run db:push
+pnpm run db:push
 ```
 
 Or run migrations (for production):
 ```bash
-npm run db:migrate
+pnpm run db:migrate
 ```
 
 Seed the database with initial data:
@@ -88,22 +88,22 @@ npx prisma db seed
 ### 4. Start Development Server
 
 ```bash
-npm run start
+pnpm run start
 ```
 
 The Functions runtime will start on `http://localhost:7071`
 
 ## Available Scripts
 
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run watch` - Watch for changes and recompile
-- `npm run start` - Start Azure Functions runtime
-- `npm run test` - Run Jest tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run db:generate` - Generate Prisma client
-- `npm run db:push` - Push schema changes to database
-- `npm run db:migrate` - Run database migrations
-- `npm run db:studio` - Open Prisma Studio
+- `pnpm run build` - Compile TypeScript to JavaScript
+- `pnpm run watch` - Watch for changes and recompile
+- `pnpm run start` - Start Azure Functions runtime
+- `pnpm run test` - Run Jest tests
+- `pnpm run test:watch` - Run tests in watch mode
+- `pnpm run db:generate` - Generate Prisma client
+- `pnpm run db:push` - Push schema changes to database
+- `pnpm run db:migrate` - Run database migrations
+- `pnpm run db:studio` - Open Prisma Studio
 
 ## Project Structure
 

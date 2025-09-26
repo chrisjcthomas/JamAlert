@@ -10,10 +10,10 @@ $vercelInstalled = Get-Command vercel -ErrorAction SilentlyContinue
 
 if (-not $vercelInstalled) {
     Write-Host "❌ Vercel CLI not found. Installing..." -ForegroundColor Red
-    npm install -g vercel
+    pnpm install -g vercel
     if ($LASTEXITCODE -ne 0) {
         Write-Host "❌ Failed to install Vercel CLI. Please install manually:" -ForegroundColor Red
-        Write-Host "   npm install -g vercel" -ForegroundColor White
+        Write-Host "   pnpm install -g vercel" -ForegroundColor White
         exit 1
     }
     Write-Host "✅ Vercel CLI installed successfully!" -ForegroundColor Green
@@ -36,7 +36,7 @@ Write-Host "✅ Vercel authentication verified!" -ForegroundColor Green
 
 # Run build to check for errors
 Write-Host "Building project..." -ForegroundColor Yellow
-npm run build
+pnpm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Build failed. Please fix build errors and try again." -ForegroundColor Red
     exit 1
