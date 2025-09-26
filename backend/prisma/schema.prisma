@@ -1,0 +1,313 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(uuid())
+  firstName             String   @map("first_name") @db.VarChar(100)
+  lastName              String   @map("last_name") @db.VarChar(100)
+  email                 String   @unique @db.VarChar(255)
+  phone                 String?  @db.VarChar(20)
+  parish                Parish
+  address               String?  @db.Text
+  smsAlerts             Boolean  @default(false) @map("sms_alerts")
+  emailAlerts           Boolean  @default(true) @map("email_alerts")
+  emergencyOnly         Boolean  @default(false) @map("emergency_only")
+  accessibilitySettings Json?    @map("accessibility_settings")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  isActive              Boolean  @default(true) @map("is_active")
+
+  // Relations
+  alertDeliveryLogs AlertDeliveryLog[]
+  alertFeedback     AlertFeedback[]
+  deactivations     UserDeactivation[]
+
+  @@map("users")
+}
+
+model Alert {
+  id              String        @id @default(uuid())
+  type            AlertType
+  severity        Severity
+  title           String        @db.VarChar(255)
+  message         String        @db.Text
+  parishes        Json          // Array of affected parishes
+  createdBy       String?       @map("created_by") @db.VarChar(36)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  expiresAt       DateTime?     @map("expires_at")
+  deliveryStatus  DeliveryStatus @default(PENDING) @map("delivery_status")
+  recipientCount  Int           @default(0) @map("recipient_count")
+  deliveredCount  Int           @default(0) @map("delivered_count")
+  failedCount     Int           @default(0) @map("failed_count")
+
+  // Relations
+  deliveryLogs AlertDeliveryLog[]
+  feedback     AlertFeedback[]
+
+  @@map("alerts")
+}
+
+model IncidentReport {
+  id                 String             @id @default(uuid())
+  incidentType       IncidentType       @map("incident_type")
+  severity           Severity
+  parish             Parish
+  community          String?            @db.VarChar(255)
+  address            String?            @db.Text
+  description        String             @db.Text
+  incidentDate       DateTime           @map("incident_date") @db.Date
+  incidentTime       String?            @map("incident_time") @db.VarChar(8)
+  reporterName       String?            @map("reporter_name") @db.VarChar(255)
+  reporterPhone      String?            @map("reporter_phone") @db.VarChar(20)
+  isAnonymous        Boolean            @default(false) @map("is_anonymous")
+  receiveUpdates     Boolean            @default(false) @map("receive_updates")
+  status             ReportStatus       @default(PENDING)
+  verificationStatus VerificationStatus @default(UNVERIFIED) @map("verification_status")
+  latitude           Decimal?           @db.Decimal(10, 8)
+  longitude          Decimal?           @db.Decimal(11, 8)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@map("incident_reports")
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  name         String    @db.VarChar(255)
+  role         AdminRole @default(ADMIN)
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  isActive     Boolean   @default(true) @map("is_active")
+
+  // Relations
+  auditLogs AuditLog[]
+
+  @@map("admin_users")
+}
+
+model AlertDeliveryLog {
+  id             String         @id @default(uuid())
+  alertId        String         @map("alert_id") @db.VarChar(36)
+  userId         String         @map("user_id") @db.VarChar(36)
+  deliveryMethod DeliveryMethod @map("delivery_method")
+  status         DeliveryLogStatus
+  errorMessage   String?        @map("error_message") @db.Text
+  sentAt         DateTime?      @map("sent_at")
+  deliveredAt    DateTime?      @map("delivered_at")
+
+  // Relations
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("alert_delivery_log")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String   @map("admin_id") @db.VarChar(36)
+  action     String   @db.VarChar(100)
+  resource   String   @db.VarChar(100)
+  resourceId String?  @map("resource_id") @db.VarChar(36)
+  details    Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.Text
+  timestamp  DateTime @default(now())
+
+  // Relations
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+model WeatherData {
+  id                String   @id @default(uuid())
+  parish            Parish
+  temperature       Float?   @db.Float
+  humidity          Float?   @db.Float
+  rainfall          Float?   @db.Float
+  windSpeed         Float?   @map("wind_speed") @db.Float
+  windDirection     String?  @map("wind_direction") @db.VarChar(10)
+  pressure          Float?   @db.Float
+  visibility        Float?   @db.Float
+  conditions        String?  @db.VarChar(100)
+  floodRisk         FloodRisk @default(LOW) @map("flood_risk")
+  dataSource        String   @map("data_source") @db.VarChar(100)
+  recordedAt        DateTime @map("recorded_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  expiresAt         DateTime @map("expires_at")
+
+  @@index([parish, recordedAt])
+  @@index([expiresAt])
+  @@map("weather_data")
+}
+
+model WeatherThreshold {
+  id                String   @id @default(uuid())
+  parish            Parish   @unique
+  rainfallThreshold Float    @map("rainfall_threshold") @db.Float
+  windSpeedThreshold Float   @map("wind_speed_threshold") @db.Float
+  floodRiskThreshold FloodRisk @default(MEDIUM) @map("flood_risk_threshold")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("weather_thresholds")
+}
+
+model WeatherAlert {
+  id              String     @id @default(uuid())
+  parish          Parish
+  alertType       WeatherAlertType @map("alert_type")
+  severity        Severity
+  conditions      Json       // Weather conditions that triggered the alert
+  thresholdValues Json       @map("threshold_values") // Threshold values at time of alert
+  actualValues    Json       @map("actual_values") // Actual weather values
+  message         String     @db.Text
+  isActive        Boolean    @default(true) @map("is_active")
+  triggeredAt     DateTime   @map("triggered_at")
+  resolvedAt      DateTime?  @map("resolved_at")
+  alertId         String?    @map("alert_id") @db.VarChar(36) // Reference to dispatched alert
+
+  @@index([parish, triggeredAt])
+  @@index([isActive])
+  @@map("weather_alerts")
+}
+
+// Enums
+enum Parish {
+  KINGSTON      @map("kingston")
+  ST_ANDREW     @map("st_andrew")
+  ST_THOMAS     @map("st_thomas")
+  PORTLAND      @map("portland")
+  ST_MARY       @map("st_mary")
+  ST_ANN        @map("st_ann")
+  TRELAWNY      @map("trelawny")
+  ST_JAMES      @map("st_james")
+  HANOVER       @map("hanover")
+  WESTMORELAND  @map("westmoreland")
+  ST_ELIZABETH  @map("st_elizabeth")
+  MANCHESTER    @map("manchester")
+  CLARENDON     @map("clarendon")
+  ST_CATHERINE  @map("st_catherine")
+}
+
+enum AlertType {
+  FLOOD      @map("flood")
+  WEATHER    @map("weather")
+  EMERGENCY  @map("emergency")
+  ALL_CLEAR  @map("all_clear")
+}
+
+enum Severity {
+  LOW    @map("low")
+  MEDIUM @map("medium")
+  HIGH   @map("high")
+}
+
+enum IncidentType {
+  FLOOD          @map("flood")
+  ACCIDENT       @map("accident")
+  FIRE           @map("fire")
+  POWER          @map("power")
+  WEATHER        @map("weather")
+  CRIME          @map("crime")
+  MEDICAL        @map("medical")
+  INFRASTRUCTURE @map("infrastructure")
+  OTHER          @map("other")
+}
+
+enum ReportStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  RESOLVED @map("resolved")
+}
+
+enum VerificationStatus {
+  UNVERIFIED         @map("unverified")
+  COMMUNITY_CONFIRMED @map("community_confirmed")
+  ODPEM_VERIFIED     @map("odpem_verified")
+}
+
+enum AdminRole {
+  ADMIN     @map("admin")
+  MODERATOR @map("moderator")
+}
+
+enum DeliveryStatus {
+  PENDING   @map("pending")
+  SENDING   @map("sending")
+  COMPLETED @map("completed")
+  FAILED    @map("failed")
+}
+
+enum DeliveryMethod {
+  EMAIL @map("email")
+  SMS   @map("sms")
+  PUSH  @map("push")
+}
+
+enum DeliveryLogStatus {
+  PENDING   @map("pending")
+  SENT      @map("sent")
+  DELIVERED @map("delivered")
+  FAILED    @map("failed")
+  BOUNCED   @map("bounced")
+}
+
+enum FloodRisk {
+  LOW      @map("low")
+  MEDIUM   @map("medium")
+  HIGH     @map("high")
+  EXTREME  @map("extreme")
+}
+
+enum WeatherAlertType {
+  FLOOD_WARNING     @map("flood_warning")
+  HEAVY_RAIN        @map("heavy_rain")
+  HIGH_WINDS        @map("high_winds")
+  SEVERE_WEATHER    @map("severe_weather")
+}
+
+model AlertFeedback {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id") @db.VarChar(36)
+  alertId     String   @map("alert_id") @db.VarChar(36)
+  rating      Int      @db.TinyInt // 1-5 rating
+  comment     String?  @db.Text
+  wasAccurate Boolean  @map("was_accurate")
+  wasHelpful  Boolean  @map("was_helpful")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, alertId])
+  @@map("alert_feedback")
+}
+
+model UserDeactivation {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id") @db.VarChar(36)
+  reason        String   @db.VarChar(255)
+  feedback      String?  @db.Text
+  deactivatedAt DateTime @map("deactivated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_deactivations")
+}

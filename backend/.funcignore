@@ -1,0 +1,11 @@
+*.js.map
+*.ts
+.git*
+.vscode
+local.settings.json
+test
+tsconfig.json
+.nyc_output
+coverage
+node_modules/@azure/functions-core-tools
+.env
