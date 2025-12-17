@@ -12,7 +12,7 @@ export async function alertsStatus(request: HttpRequest, context: InvocationCont
 
   try {
     // Authenticate admin user
-    const admin = await authenticateAdmin(request);
+    const admin = await authenticateAdmin(request, context);
     if (!admin) {
       return {
         status: 401,
