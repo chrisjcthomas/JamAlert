@@ -78,9 +78,12 @@ export async function testDatabaseConnection(): Promise<boolean> {
       console.error(`Database connection attempt ${attempt} failed:`, error);
 
       if (attempt < DB_CONFIG.maxRetries) {
-        const delay = DB_CONFIG.retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
-        console.log(`Retrying in ${delay}ms...`);
-        await sleep(delay);
+        // Skip delay in test environment
+        if (process.env.NODE_ENV !== 'test') {
+          const delay = DB_CONFIG.retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          console.log(`Retrying in ${delay}ms...`);
+          await sleep(delay);
+        }
       }
     }
   }
@@ -113,9 +116,12 @@ export async function withRetry<T>(
       }
 
       if (attempt < DB_CONFIG.maxRetries) {
-        const delay = DB_CONFIG.retryDelay * Math.pow(2, attempt - 1);
-        console.log(`Retrying ${operationName} in ${delay}ms...`);
-        await sleep(delay);
+        // Skip delay in test environment
+        if (process.env.NODE_ENV !== 'test') {
+          const delay = DB_CONFIG.retryDelay * Math.pow(2, attempt - 1);
+          console.log(`Retrying ${operationName} in ${delay}ms...`);
+          await sleep(delay);
+        }
       }
     }
   }

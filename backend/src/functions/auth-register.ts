@@ -15,7 +15,7 @@ const registrationSchema = z.object({
     'Invalid phone number format'
   ),
   parish: z.nativeEnum(Parish, { errorMap: () => ({ message: 'Invalid parish selected' }) }),
-  address: z.string().optional().max(1000, 'Address too long'),
+  address: z.string().max(1000, 'Address too long').optional(),
   smsAlerts: z.boolean().default(false),
   emailAlerts: z.boolean().default(true),
   emergencyOnly: z.boolean().default(false),
@@ -57,12 +57,16 @@ export async function registerUser(request: HttpRequest, context: InvocationCont
     }
 
     // Validate and sanitize phone number if provided
-    if (validatedData.phone) {
-      validatedData.phone = validationService.sanitizePhoneNumber(validatedData.phone);
+    let phoneToSave = validatedData.phone;
+    if (phoneToSave) {
+      phoneToSave = validationService.sanitizePhoneNumber(phoneToSave);
     }
 
     // Create user account
-    const newUser = await userService.create(validatedData);
+    const newUser = await userService.create({
+      ...validatedData,
+      phone: phoneToSave,
+    });
     context.log(`User created successfully: ${newUser.id}`);
 
     // Send confirmation email
@@ -70,7 +74,7 @@ export async function registerUser(request: HttpRequest, context: InvocationCont
       await emailService.sendRegistrationConfirmation(newUser);
       context.log(`Confirmation email sent to: ${newUser.email}`);
     } catch (emailError) {
-      context.log.error('Failed to send confirmation email:', emailError);
+      context.log('Failed to send confirmation email:', emailError);
       // Don't fail registration if email fails - log and continue
     }
 
@@ -91,7 +95,7 @@ export async function registerUser(request: HttpRequest, context: InvocationCont
     };
 
   } catch (error) {
-    context.log.error('Registration error:', error);
+    context.log('Registration error:', error);
 
     if (error instanceof z.ZodError) {
       // Validation error

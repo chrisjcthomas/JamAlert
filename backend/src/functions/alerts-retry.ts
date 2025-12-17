@@ -12,7 +12,7 @@ export async function alertsRetry(request: HttpRequest, context: InvocationConte
 
   try {
     // Authenticate admin user
-    const admin = await authenticateAdmin(request);
+    const admin = await authenticateAdmin(request, context);
     if (!admin) {
       return {
         status: 401,

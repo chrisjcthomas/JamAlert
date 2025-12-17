@@ -3,26 +3,6 @@ import { getPrismaClient, withRetry, DatabaseError } from '../lib/database';
 import { UserRegistrationRequest, CreateUserData, UpdateUserData } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
-// Create service instance
-const userService = new UserService();
-
-// Export convenience functions
-export const createUser = (userData: UserRegistrationRequest) => userService.create(userData);
-export const getUserByEmail = (email: string) => userService.findByEmail(email);
-export const getUserById = (id: string) => userService.findById(id);
-export const updateUser = (id: string, userData: UpdateUserData) => userService.update(id, userData);
-export const deleteUser = (id: string) => userService.softDelete(id);
-export const getUsersByParishes = (parishes: Parish[], activeOnly?: boolean) => userService.getUsersByParishes(parishes, activeOnly);
-export const getEmailSubscribers = (parishes: Parish[], emergencyOnly?: boolean) => userService.getEmailSubscribers(parishes, emergencyOnly);
-export const getSmsSubscribers = (parishes: Parish[], emergencyOnly?: boolean) => userService.getSmsSubscribers(parishes, emergencyOnly);
-export const getUserStats = () => userService.getUserStats();
-export const searchUsers = (params: any) => userService.searchUsers(params);
-export const validateUser = (id: string) => userService.validateUser(id);
-export const getUserAlertHistory = (userId: string, params: any) => userService.getUserAlertHistory(userId, params);
-export const submitAlertFeedback = (userId: string, alertId: string, feedback: any) => userService.submitAlertFeedback(userId, alertId, feedback);
-export const getUserAlertFeedback = (userId: string, alertId: string) => userService.getUserAlertFeedback(userId, alertId);
-export const deactivateUser = (userId: string, reason?: string, feedback?: string) => userService.deactivateUser(userId, reason, feedback);
-
 export class UserService {
   private prisma = getPrismaClient();
 
@@ -541,3 +521,23 @@ export class UserService {
     }, 'Deactivate user');
   }
 }
+
+// Create service instance
+const userService = new UserService();
+
+// Export convenience functions
+export const createUser = (userData: UserRegistrationRequest) => userService.create(userData);
+export const getUserByEmail = (email: string) => userService.findByEmail(email);
+export const getUserById = (id: string) => userService.findById(id);
+export const updateUser = (id: string, userData: UpdateUserData) => userService.update(id, userData);
+export const deleteUser = (id: string) => userService.softDelete(id);
+export const getUsersByParishes = (parishes: Parish[], activeOnly?: boolean) => userService.getUsersByParishes(parishes, activeOnly);
+export const getEmailSubscribers = (parishes: Parish[], emergencyOnly?: boolean) => userService.getEmailSubscribers(parishes, emergencyOnly);
+export const getSmsSubscribers = (parishes: Parish[], emergencyOnly?: boolean) => userService.getSmsSubscribers(parishes, emergencyOnly);
+export const getUserStats = () => userService.getUserStats();
+export const searchUsers = (params: any) => userService.searchUsers(params);
+export const validateUser = (id: string) => userService.validateUser(id);
+export const getUserAlertHistory = (userId: string, params: any) => userService.getUserAlertHistory(userId, params);
+export const submitAlertFeedback = (userId: string, alertId: string, feedback: any) => userService.submitAlertFeedback(userId, alertId, feedback);
+export const getUserAlertFeedback = (userId: string, alertId: string) => userService.getUserAlertFeedback(userId, alertId);
+export const deactivateUser = (userId: string, reason?: string, feedback?: string) => userService.deactivateUser(userId, reason, feedback);

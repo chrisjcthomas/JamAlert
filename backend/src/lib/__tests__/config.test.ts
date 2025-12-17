@@ -46,6 +46,7 @@ describe('Configuration', () => {
       process.env.SMTP_USER = 'test@test.com';
       process.env.SMTP_PASS = 'test-password';
       process.env.WEATHER_API_KEY = 'test-weather-key';
+      delete process.env.NODE_ENV; // Ensure default value usage
 
       const config = getConfig();
       expect(config.NODE_ENV).toBe('development');

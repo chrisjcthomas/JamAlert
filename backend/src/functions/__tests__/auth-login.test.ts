@@ -65,7 +65,7 @@ describe('authLogin', () => {
       text: jest.fn().mockResolvedValue(JSON.stringify(loginData)),
     };
 
-    mockValidationService.validateAdminLogin.mockReturnValue({
+    (mockValidationService as any).validateAdminLogin.mockReturnValue({
       isValid: false,
       errors: ['Valid email is required', 'Password is required']
     });
@@ -91,7 +91,7 @@ describe('authLogin', () => {
       text: jest.fn().mockResolvedValue(JSON.stringify(loginData)),
     };
 
-    mockValidationService.validateAdminLogin.mockReturnValue({
+    (mockValidationService as any).validateAdminLogin.mockReturnValue({
       isValid: true,
       errors: []
     });
@@ -137,7 +137,7 @@ describe('authLogin', () => {
       text: jest.fn().mockResolvedValue(JSON.stringify(loginData)),
     };
 
-    mockValidationService.validateAdminLogin.mockReturnValue({
+    (mockValidationService as any).validateAdminLogin.mockReturnValue({
       isValid: true,
       errors: []
     });
