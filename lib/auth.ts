@@ -36,41 +36,8 @@ export async function signIn(email: string, password: string): Promise<{ user: U
 
     return response
   } catch (error) {
-    // Fall back to mock credentials for demo purposes
-    if (email === "admin@jamalert.jm" && password === "admin123") {
-      const user: User = {
-        id: "1",
-        email: "admin@jamalert.jm",
-        name: "Admin User",
-        role: "admin",
-        createdAt: new Date().toISOString(),
-      }
-      const token = "mock-admin-token"
-
-      localStorage.setItem("auth-token", token)
-      localStorage.setItem("auth-user", JSON.stringify(user))
-
-      return { user, token }
-    }
-
-    if (email === "user@example.com" && password === "user123") {
-      const user: User = {
-        id: "2",
-        email: "user@example.com",
-        name: "John Smith",
-        role: "user",
-        parish: "St. Catherine",
-        phone: "+1 (876) 123-4567",
-        createdAt: new Date().toISOString(),
-      }
-      const token = "mock-user-token"
-
-      localStorage.setItem("auth-token", token)
-      localStorage.setItem("auth-user", JSON.stringify(user))
-
-      return { user, token }
-    }
-
+    // In demo mode, the API client should handle mock responses.
+    // We should not have hardcoded credentials here as a fallback.
     return null
   }
 }
