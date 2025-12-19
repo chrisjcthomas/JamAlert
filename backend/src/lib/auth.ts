@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions, VerifyOptions, JwtPayload, TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
 import { getJwtConfig } from './config';
+import crypto from 'crypto';
 
 /**
  * Password hashing utilities
@@ -44,18 +45,18 @@ export class PasswordService {
     const numbers = '0123456789';
     const symbols = '!@#$%^&*';
     
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
+    password += lowercase[crypto.randomInt(lowercase.length)];
+    password += uppercase[crypto.randomInt(uppercase.length)];
+    password += numbers[crypto.randomInt(numbers.length)];
+    password += symbols[crypto.randomInt(symbols.length)];
     
     // Fill the rest randomly
     for (let i = password.length; i < length; i++) {
-      password += charset[Math.floor(Math.random() * charset.length)];
+      password += charset[crypto.randomInt(charset.length)];
     }
     
     // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    return password.split('').sort(() => crypto.randomInt(2) - 0.5).join('');
   }
 }
 
@@ -244,8 +245,9 @@ export class SessionService {
   private static generateSessionId(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    const length = 32;
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(crypto.randomInt(chars.length));
     }
     return result;
   }
