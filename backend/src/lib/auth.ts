@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions, VerifyOptions, JwtPayload, TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
 import { getJwtConfig } from './config';
+import crypto from 'crypto';
 
 /**
  * Password hashing utilities
@@ -36,7 +37,6 @@ export class PasswordService {
    */
   static generateSecurePassword(length: number = 16): string {
     const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-    let password = '';
     
     // Ensure at least one character from each required category
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -44,18 +44,30 @@ export class PasswordService {
     const numbers = '0123456789';
     const symbols = '!@#$%^&*';
     
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
+    const requiredChars = [
+      lowercase[crypto.randomInt(0, lowercase.length)],
+      uppercase[crypto.randomInt(0, uppercase.length)],
+      numbers[crypto.randomInt(0, numbers.length)],
+      symbols[crypto.randomInt(0, symbols.length)]
+    ];
     
     // Fill the rest randomly
-    for (let i = password.length; i < length; i++) {
-      password += charset[Math.floor(Math.random() * charset.length)];
+    const remainingLength = length - requiredChars.length;
+    const remainingChars: string[] = [];
+    for (let i = 0; i < remainingLength; i++) {
+      remainingChars.push(charset[crypto.randomInt(0, charset.length)]);
     }
     
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    // Combine all characters
+    const allChars = [...requiredChars, ...remainingChars];
+
+    // Fisher-Yates shuffle
+    for (let i = allChars.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [allChars[i], allChars[j]] = [allChars[j], allChars[i]];
+    }
+
+    return allChars.join('');
   }
 }
 
@@ -245,7 +257,7 @@ export class SessionService {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(crypto.randomInt(0, chars.length));
     }
     return result;
   }
