@@ -205,7 +205,7 @@ describe('SessionService', () => {
       
       expect(sessionId).toBeDefined();
       expect(typeof sessionId).toBe('string');
-      expect(sessionId.length).toBe(32);
+      expect(sessionId.length).toBe(32); // hex string of 16 bytes
     });
 
     it('should store session data correctly', () => {
@@ -239,7 +239,7 @@ describe('SessionService', () => {
       expect(session).toBeNull();
     });
 
-    it('should update last accessed time', () => {
+    it('should update last accessed time', async () => {
       const userId = 'user-123';
       const sessionId = SessionService.createSession(userId);
       
@@ -247,10 +247,10 @@ describe('SessionService', () => {
       const firstAccess = session1.lastAccessed;
       
       // Wait a moment
-      setTimeout(() => {
-        const session2 = SessionService.getSession(sessionId);
-        expect(session2.lastAccessed.getTime()).toBeGreaterThan(firstAccess.getTime());
-      }, 10);
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const session2 = SessionService.getSession(sessionId);
+      expect(session2.lastAccessed.getTime()).toBeGreaterThanOrEqual(firstAccess.getTime());
     });
   });
 

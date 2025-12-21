@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions, VerifyOptions, JwtPayload, TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
+import crypto from 'crypto';
 import { getJwtConfig } from './config';
 
 /**
@@ -44,18 +45,24 @@ export class PasswordService {
     const numbers = '0123456789';
     const symbols = '!@#$%^&*';
     
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
+    password += lowercase[crypto.randomInt(lowercase.length)];
+    password += uppercase[crypto.randomInt(uppercase.length)];
+    password += numbers[crypto.randomInt(numbers.length)];
+    password += symbols[crypto.randomInt(symbols.length)];
     
     // Fill the rest randomly
     for (let i = password.length; i < length; i++) {
-      password += charset[Math.floor(Math.random() * charset.length)];
+      password += charset[crypto.randomInt(charset.length)];
     }
     
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    // Shuffle the password using Fisher-Yates shuffle with secure random
+    const passwordArray = password.split('');
+    for (let i = passwordArray.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(i + 1);
+      [passwordArray[i], passwordArray[j]] = [passwordArray[j], passwordArray[i]];
+    }
+
+    return passwordArray.join('');
   }
 }
 
@@ -242,12 +249,9 @@ export class SessionService {
    * Generate secure session ID
    */
   private static generateSessionId(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    // Generate 16 bytes of random data and convert to hex string (32 chars)
+    // This is more secure than Math.random() and maintains the original length
+    return crypto.randomBytes(16).toString('hex');
   }
 
   /**
