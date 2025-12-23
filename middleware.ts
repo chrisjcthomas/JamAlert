@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { jwtVerify } from "jose"
 
 // Define protected routes
 const protectedRoutes = ["/dashboard", "/admin"]
 const adminRoutes = ["/admin"]
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Check if the current path is protected
@@ -23,19 +24,29 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL(loginUrl, request.url))
     }
 
-    // For admin routes, check if user has admin role
-    if (isAdminRoute) {
-      const userStr = request.cookies.get("auth-user")?.value
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          if (user.role !== "admin") {
-            return NextResponse.redirect(new URL("/unauthorized", request.url))
-          }
-        } catch {
-          return NextResponse.redirect(new URL("/admin/login", request.url))
+    try {
+      // Validate the token and check for admin role if needed
+      if (isAdminRoute) {
+        // Mock token handling for development/testing
+        if (process.env.NODE_ENV !== 'production' && authToken === "mock-admin-token") {
+           // Allow pass for mock admin token in non-production environments
+        } else if (authToken.startsWith("mock-")) {
+          // Other mock tokens are not admin (or we are in production where mocks are disabled)
+          return NextResponse.redirect(new URL("/unauthorized", request.url))
+        } else {
+           // Verify real JWT
+           const secret = new TextEncoder().encode(process.env.JWT_SECRET || "default_dev_secret")
+           const { payload } = await jwtVerify(authToken, secret)
+
+           if (payload.role !== "admin") {
+             return NextResponse.redirect(new URL("/unauthorized", request.url))
+           }
         }
       }
+    } catch (error) {
+      console.error("Token verification failed:", error)
+      // Invalid token
+      return NextResponse.redirect(new URL("/admin/login", request.url))
     }
   }
 
